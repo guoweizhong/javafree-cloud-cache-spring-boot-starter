@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.2</version>
+        <relativePath/>
+    </parent>
+    <groupId>com.javafree.cloud.cache</groupId>
+    <artifactId>javafree-cloud-cache-spring-boot-starter</artifactId>
+    <version>1.0.6</version>
+    <name>javafree-cloud-cache-spring-boot-starter</name>
+    <description>support L1 caffeine and L2 redis cache</description>
+    <url>https://github.com/guoweizhong/javafree-cloud-2022</url>
+    <licenses>
+        <license>
+            <name>The ApacheSoftware License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <name>guoweizhong</name>
+            <email>gwz126@126.com</email>
+        </developer>
+    </developers>
+
+    <properties>
+        <mica.version>2.3.1</mica.version>
+        <caffeine.version>3.1.1</caffeine.version>
+        <resilience4j-circuit.version>1.7.1</resilience4j-circuit.version>
+    </properties>
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-cache</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+    <!-- redis 用 Jackson2JsonRedisSerializer 序列化对象 -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <!--lettuce pool 缓存连接池 -->
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-pool2</artifactId>
+    </dependency>
+    <!--caffeine 本地缓存 -->
+    <dependency>
+        <groupId>com.github.ben-manes.caffeine</groupId>
+        <artifactId>caffeine</artifactId>
+        <version>${caffeine.version}</version>
+    </dependency>
+    <!--resilience4j 熔断处理 -->
+    <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-circuitbreaker</artifactId>
+        <version>${resilience4j-circuit.version}</version>
+    </dependency>
+
+    <!--健康信息收集 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Test 相关-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+    <!--用Testcontainers 做数据库等服务的 docker image并启动，不需要有真实的数据库或缓存服务器 -->
+    <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>1.17.3</version>
+        <scope>test</scope>
+    </dependency>
+    <!-- 异步校验工具awaitility 用于测代码有异步或者队列处理的中间过程 -->
+    <dependency>
+        <groupId>org.awaitility</groupId>
+        <artifactId>awaitility</artifactId>
+        <version>4.2.0</version>
+        <scope>test</scope>
+    </dependency>
+
+    <!-- lombok 代码简化写法工具 -->
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <version>1.18.24</version>
+        <scope>provided</scope>
+    </dependency>
+
+
+    <!-- 用mica生成 Spring boot starter 的一些基础配置 -->
+    <dependency>
+        <groupId>net.dreamlu</groupId>
+        <artifactId>mica-auto</artifactId>
+        <version>${mica.version}</version>
+        <optional>true</optional>
+    </dependency>
+
+    <!-- 产生配置元数据 方便yml或者properties中输入时，会有相应的提示-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-configuration-processor</artifactId>
+        <optional>true</optional>
+    </dependency>
+</dependencies>
+</project>

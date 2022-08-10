@@ -1,0 +1,155 @@
+package com.javafree.cloud.cache.support;
+
+
+import com.javafree.cloud.cache.config.JavafreeMultilevelCacheAutoConfiguration;
+import com.javafree.cloud.cache.properties.CircuitBreakerProperties;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker.State;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType;
+import java.time.Duration;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
+import lombok.extern.slf4j.Slf4j;
+import org.awaitility.Awaitility;
+import org.checkerframework.checker.units.qual.A;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration;
+import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cache.Cache;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.context.junit4.SpringRunner;
+
+@Slf4j
+@ActiveProfiles("test")
+@SpringBootTest(
+        classes = {
+                JavafreeMultilevelCacheAutoConfiguration.class,
+                RedisAutoConfiguration.class,
+                CacheAutoConfiguration.class
+        })
+@RunWith(SpringRunner.class)
+@ExtendWith(SpringExtension.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+class JavafreeMultiLevelCacheTest {
+    private static final AtomicInteger COUNTER = new AtomicInteger(0);
+
+    @Autowired JavafreeMultiLevelCacheManager cacheManager;
+
+    @ParameterizedTest
+    @MethodSource("operations")
+    void circuitBreakerTest(TrieConsumer<String, JavafreeMultiLevelCacheManager, JavafreeMultiLevelCache> consumer)
+            throws Throwable {
+        final String key = "circuitBreakerTest" + COUNTER.incrementAndGet();
+        final CircuitBreakerProperties cbp = cacheManager.getProperties().getCircuitBreaker();
+
+        JavafreeMultiLevelCache cache = (JavafreeMultiLevelCache) cacheManager.getCache(key);
+        Assertions.assertNotNull(cache, "Cache should be automatically created upon request");
+
+        CircuitBreaker cb = cacheManager.getCircuitBreaker();
+        Assertions.assertNotNull(cb, "Cache must have circuit breaker defined");
+        Assertions.assertEquals(
+                State.CLOSED,
+                cb.getState(),
+                "Circuit breaker initial state must be CLOSED (e.g. permits requests to external service)");
+
+        for (int i = 0; i < cbp.getMinimumNumberOfCalls(); i++) {
+            Assertions.assertNull(cache.lookup(key), "There must be no connection to Redis");
+        }
+
+        Assertions.assertEquals(
+                State.OPEN,
+                cb.getState(),
+                "Circuit breaker must become OPEN after minimum amount of calls failed / were slow");
+
+        // Execute any operations required between
+        consumer.accept(key, cacheManager, cache);
+
+        Awaitility.await()
+                .pollInterval(Duration.ofMillis(200))
+                .atMost(cbp.getWaitDurationInOpenState().multipliedBy(2))
+                .untilAsserted(
+                        () -> {
+                            if (SlidingWindowType.COUNT_BASED.equals(cbp.getSlidingWindowType())) {
+                                Assertions.assertNull(cache.lookup(key), "There must be no connection to Redis");
+                            }
+
+                            Assertions.assertEquals(
+                                    State.HALF_OPEN,
+                                    cb.getState(),
+                                    "Circuit breaker must become HALF_OPEN after certain amount of time / calls");
+                        });
+
+        for (int i = 0; i < cbp.getPermittedNumberOfCallsInHalfOpenState(); i++) {
+            Assertions.assertNull(cache.lookup(key), "There must be no connection to Redis");
+        }
+
+        Assertions.assertEquals(
+                State.OPEN,
+                cb.getState(),
+                "Circuit breaker must become OPEN again if permitted calls failed");
+    }
+
+    static Stream<Arguments> operations() {
+        return Stream.of(
+                Arguments.of(
+                        (TrieConsumer<String, JavafreeMultiLevelCacheManager, JavafreeMultiLevelCache>)
+                                (key, cacheManager, cache) -> {}),
+                Arguments.of(
+                        (TrieConsumer<String, JavafreeMultiLevelCacheManager, JavafreeMultiLevelCache>)
+                                (key, cacheManager, cache) -> {
+                                    Assertions.assertDoesNotThrow(
+                                            () -> cache.put(key, key), "Entity must be able to be created");
+                                    Assertions.assertEquals(
+                                            key,
+                                            cache.getLocalCache().getIfPresent(key),
+                                            "Local cache must contain value despite opened circuit breaker");
+                                    Awaitility.await()
+                                            .atMost(cacheManager.getProperties().getTimeToLive())
+                                            .until(() -> cache.getLocalCache().getIfPresent(key) == null);
+                                }),
+                Arguments.of(
+                        (TrieConsumer<String, JavafreeMultiLevelCacheManager, JavafreeMultiLevelCache>)
+                                (key, cacheManager, cache) -> {
+                                    Assertions.assertDoesNotThrow(
+                                            () -> cache.get(key, (Callable<Object>) () -> key),
+                                            "Entity must be able to be created");
+                                    Assertions.assertEquals(
+                                            key,
+                                            cache.getLocalCache().getIfPresent(key),
+                                            "Local cache must contain value despite opened circuit breaker");
+                                    Awaitility.await()
+                                            .atMost(cacheManager.getProperties().getTimeToLive())
+                                            .until(() -> cache.getLocalCache().getIfPresent(key) == null);
+                                }),
+                Arguments.of(
+                        (TrieConsumer<String, JavafreeMultiLevelCacheManager, JavafreeMultiLevelCache>)
+                                (key, cacheManager, cache) -> {
+                                    Assertions.assertThrows(
+                                            Cache.ValueRetrievalException.class,
+                                            () ->
+                                                    cache.get(
+                                                            key,
+                                                            () -> {
+                                                                throw new IllegalStateException("Test exception");
+                                                            }));
+                                    Assertions.assertNull(
+                                            cache.getLocalCache().getIfPresent(key),
+                                            "Local cache must not contain value when circuit breaker is opened and value loader threw an exception");
+                                }));
+    }
+
+    @FunctionalInterface
+    interface TrieConsumer<A, B, C> {
+        void accept(A a, B b, C c) throws Throwable;
+    }
+}
