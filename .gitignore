@@ -1,4 +1,7 @@
-target/
+ 
+# target 目录
+/target/
+
 # Package Files #
 *.jar
 *.war
@@ -14,14 +17,21 @@ target/
 # Log file
 *.log
 
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
 ### Gradle Files ###
 .gradle
 /build/
 !gradle/wrapper/gradle-wrapper.jar
 
-### IntelliJ IDEA ###
+#idea 本地目录
+
 .idea
 *.iws
 *.iml
 *.ipr
-/out/ 
+/out/
